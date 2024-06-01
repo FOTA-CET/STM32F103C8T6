@@ -337,7 +337,6 @@ void clearFlash()
 		EraseInitStruct.NbPages       = 47;
 
 		int ret = HAL_FLASHEx_Erase( &EraseInitStruct, &SectorError );
-		HAL_FLASH_Lock();
 }
 
 static void goto_application( void )
