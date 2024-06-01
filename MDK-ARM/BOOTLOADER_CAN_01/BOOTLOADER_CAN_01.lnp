@@ -1,0 +1,24 @@
+--cpu Cortex-M3
+"bootloader_can_01\startup_stm32f103xb.o"
+"bootloader_can_01\main.o"
+"bootloader_can_01\stm32f1xx_it.o"
+"bootloader_can_01\stm32f1xx_hal_msp.o"
+"bootloader_can_01\stm32f1xx_hal_gpio_ex.o"
+"bootloader_can_01\stm32f1xx_hal_can.o"
+"bootloader_can_01\stm32f1xx_hal.o"
+"bootloader_can_01\stm32f1xx_hal_rcc.o"
+"bootloader_can_01\stm32f1xx_hal_rcc_ex.o"
+"bootloader_can_01\stm32f1xx_hal_gpio.o"
+"bootloader_can_01\stm32f1xx_hal_dma.o"
+"bootloader_can_01\stm32f1xx_hal_cortex.o"
+"bootloader_can_01\stm32f1xx_hal_pwr.o"
+"bootloader_can_01\stm32f1xx_hal_flash.o"
+"bootloader_can_01\stm32f1xx_hal_flash_ex.o"
+"bootloader_can_01\stm32f1xx_hal_exti.o"
+"bootloader_can_01\stm32f1xx_hal_tim.o"
+"bootloader_can_01\stm32f1xx_hal_tim_ex.o"
+"bootloader_can_01\system_stm32f1xx.o"
+--strict --scatter "BOOTLOADER_CAN_01\BOOTLOADER_CAN_01.sct"
+--summary_stderr --info summarysizes --map --load_addr_map_info --xref --callgraph --symbols
+--info sizes --info totals --info unused --info veneers
+--list "BOOTLOADER_CAN_01.map" -o BOOTLOADER_CAN_01\BOOTLOADER_CAN_01.axf
