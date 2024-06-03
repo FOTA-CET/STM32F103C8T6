@@ -35,12 +35,14 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PERCENT_ADDR 0x100
-#define NUMBER_PAGE_CURRENT 9
-#define NUMBER_PAGE_APP1 10
-#define NUMBER_PAGE_APP2 69
+#define NUMBER_PAGE_CONFIG 9
+#define NUMBER_PAGE_CURRENT 10
+#define NUMBER_PAGE_OTA 69
 
-#define SIZE_PAGE_APP1 59
-#define SIZE_PAGE_APP2 59
+#define SIZE_PAGE_CURRENT 59
+#define SIZE_PAGE_OTA 59
+
+#define FLASH_SIZE_HEX ((uint32_t)1024*SIZE_PAGE_CURRENT)
 
 /* USER CODE END PD */
 
@@ -53,9 +55,9 @@
 CAN_HandleTypeDef hcan;
 
 /* USER CODE BEGIN PV */
-uint32_t PROGRAM_START_ADDRESS_1 = ((uint32_t)0x08000000 + (NUMBER_PAGE_APP1*1024));
-uint32_t PROGRAM_START_ADDRESS_2 = ((uint32_t)0x08000000 + (NUMBER_PAGE_APP2*1024));
-uint32_t CURRENT_START = ((uint32_t)0x08000000 + (NUMBER_PAGE_CURRENT*1024));
+uint32_t PROGRAM_START_CURRENT = ((uint32_t)0x08000000 + (NUMBER_PAGE_CURRENT*1024));
+uint32_t PROGRAM_START_OTA = ((uint32_t)0x08000000 + (NUMBER_PAGE_OTA*1024));
+uint32_t CURRENT_START_CONFIG = ((uint32_t)0x08000000 + (NUMBER_PAGE_CONFIG*1024));
 uint32_t FLASH_ADDRESS;
 
 uint32_t count=0,size_count=0, size_count_can = 1;
@@ -75,6 +77,7 @@ uint16_t application_size = 0;
 
 uint32_t timeout = 5000;
 uint32_t initTime;
+typedef enum {OTA, CURRENT}Region;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -85,10 +88,9 @@ static void MX_CAN_Init(void);
 void CAN_Send(uint32_t id, uint8_t *data, uint8_t len);
 int processPercentCAN(int firmwareSize, int count);
 static void goto_application( void );
-void clearFlash(uint8_t chooseVersion);
-void updateCurrent(uint8_t chooseVersion);
-void toggleCurrent();
+void clearFlash(Region chooseVersion);
 void resetTick();
+void updateCurrent();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -124,20 +126,10 @@ int main(void)
 
   /* Initialize all configured peripherals */
   MX_GPIO_Init();
-  // MX_CAN_Init();
+  MX_CAN_Init();
   /* USER CODE BEGIN 2 */
-	
-	uint32_t current = *(uint32_t*)CURRENT_START;
-	if( (uint8_t)current == 0x00) 
-	{
-			FLASH_ADDRESS = PROGRAM_START_ADDRESS_1;
-			clearFlash(0x01);
-	}
-	else if( (uint8_t)current == 0x01 || (uint8_t)current == 0xFF) 
-	{
-		FLASH_ADDRESS = PROGRAM_START_ADDRESS_2;
-		clearFlash(0x00);
-	}
+	FLASH_ADDRESS = PROGRAM_START_CURRENT;
+	clearFlash(OTA);
 
 	initTime = HAL_GetTick();
 	
@@ -151,7 +143,8 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		if(goto_aplication == 1 || (HAL_GetTick() - initTime) >= timeout)
+		// if(goto_aplication == 1 || (HAL_GetTick() - initTime) >= timeout)
+		if(goto_aplication == 1)
 		{
 			goto_application();
 		}
@@ -315,7 +308,7 @@ static HAL_StatusTypeDef write_data_to_flash_app( uint8_t *data, uint16_t data_l
     {
       uint16_t halfword_data = data[i * 2] | (data[i * 2 + 1] << 8);
       ret = HAL_FLASH_Program( FLASH_TYPEPROGRAM_HALFWORD,
-                               (FLASH_ADDRESS + application_write_idx ),
+                               (PROGRAM_START_OTA + application_write_idx ),
                                halfword_data
                              );
       if( ret == HAL_OK )
@@ -354,22 +347,22 @@ int processPercentCAN(int firmwareSize, int count)
 	return -1;
 }
 
-void clearFlash(uint8_t chooseVersion)
+void clearFlash(Region chooseVersion)
 {
 		HAL_FLASH_Unlock();
 		FLASH_EraseInitTypeDef EraseInitStruct;
 		uint32_t SectorError;
 
 		EraseInitStruct.TypeErase     = FLASH_TYPEERASE_PAGES;
-		if(chooseVersion == 0x01)
+		if(chooseVersion == CURRENT)
 		{
-			EraseInitStruct.PageAddress   = PROGRAM_START_ADDRESS_1;
-			EraseInitStruct.NbPages       = SIZE_PAGE_APP1;
+			EraseInitStruct.PageAddress   = PROGRAM_START_CURRENT;
+			EraseInitStruct.NbPages       = SIZE_PAGE_CURRENT;
 		}
 		else
 		{
-			EraseInitStruct.PageAddress   = PROGRAM_START_ADDRESS_2;
-			EraseInitStruct.NbPages       = SIZE_PAGE_APP2;
+			EraseInitStruct.PageAddress   = PROGRAM_START_OTA;
+			EraseInitStruct.NbPages       = SIZE_PAGE_OTA;
 		}
 
 		int ret = HAL_FLASHEx_Erase( &EraseInitStruct, &SectorError );
@@ -377,16 +370,7 @@ void clearFlash(uint8_t chooseVersion)
 
 static void goto_application( void )
 {
-	uint32_t current = *(uint32_t*)CURRENT_START;
-	uint32_t PROGRAM_START_ADDRESS; 
-	if( (uint8_t)current == 0x00) 
-	{
-		PROGRAM_START_ADDRESS = PROGRAM_START_ADDRESS_2;
-	}
-	else if( (uint8_t)current == 0x01 || (uint8_t)current == 0xFF)
-	{
-		PROGRAM_START_ADDRESS = PROGRAM_START_ADDRESS_1;
-	}
+	uint32_t PROGRAM_START_ADDRESS = PROGRAM_START_CURRENT;
 	
 	void (*app_reset_handler)(void) = (void*)(*((volatile uint32_t*)(PROGRAM_START_ADDRESS + 4U)));
 
@@ -426,7 +410,8 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 				percentBuf[0] = 100;
 				CAN_Send(PERCENT_ADDR, percentBuf, 1);
 				write_data_to_flash_app( RxData, RxHeader.DLC);
-				toggleCurrent();
+				// clearFlash(CURRENT);
+				// updateCurrent();
 				goto_aplication = 1;
 				return;
 			}
@@ -461,34 +446,25 @@ void resetTick()
 	HAL_Delay(1);
 }
 
-void updateCurrent(uint8_t chooseVersion)
+void updateCurrent()
 {
-	
-	FLASH_EraseInitTypeDef EraseInitStruct;
-	uint32_t SectorError;
-	
+	HAL_StatusTypeDef status;
+	uint32_t i = 0;
+	uint32_t buffer;
+
 	HAL_FLASH_Unlock();
 
-	EraseInitStruct.TypeErase     = FLASH_TYPEERASE_PAGES;
-	EraseInitStruct.PageAddress   = CURRENT_START;
-	EraseInitStruct.NbPages       = 1;
-	HAL_FLASHEx_Erase( &EraseInitStruct, &SectorError );
+	for (i = 0; i < FLASH_SIZE_HEX; i += 4) {
+			buffer = *(__IO uint32_t*)(PROGRAM_START_OTA + i);
 
-	HAL_FLASH_Program(FLASH_TYPEPROGRAM_HALFWORD,CURRENT_START, chooseVersion);
+			status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, PROGRAM_START_CURRENT + i, buffer);
+			
+			if (status != HAL_OK) {
+					break;
+			}
+	}
+
 	HAL_FLASH_Lock();
-}
-
-void toggleCurrent()
-{
-	uint32_t current = *(uint32_t*)CURRENT_START;
-	if( (uint8_t)current == 0x00) 
-	{
-		updateCurrent(0x01);
-	}
-	else if( (uint8_t)current == 0x01 || (uint8_t)current == 0xFF) 
-	{
-		updateCurrent(0x00);
-	}
 }
 /* USER CODE END 4 */
 
