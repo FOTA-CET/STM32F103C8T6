@@ -44,6 +44,9 @@
 
 #define FLASH_SIZE_HEX ((uint32_t)1024*SIZE_PAGE_CURRENT)
 
+typedef enum {OTA, CURRENT}Region;
+typedef enum {INIT, FW_SIZE, CAN_FLASH}State;
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -68,16 +71,16 @@ uint16_t number_data_can = 0;
 uint16_t counter = 0;
 uint8_t currentPercent = -1;
 volatile char goto_aplication=0;
-
 uint8_t percentBuf[1] = {};
 	
 uint16_t application_write_idx = 0;
 	
-uint16_t application_size = 0;
-
-uint32_t timeout = 5000;
+uint32_t timeout_init = 4500;
+uint32_t timeout_flash = 1000;
 uint32_t initTime;
-typedef enum {OTA, CURRENT}Region;
+	
+State bootloaderState = INIT;
+
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -143,10 +146,17 @@ int main(void)
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-		// if(goto_aplication == 1 || (HAL_GetTick() - initTime) >= timeout)
-		if(goto_aplication == 1)
+		if(bootloaderState == INIT)
 		{
-			goto_application();
+			if((HAL_GetTick() - initTime) >= timeout_init) goto_application();
+		}
+		else if(bootloaderState == FW_SIZE)
+		{
+			if((HAL_GetTick() - initTime) >= timeout_flash) goto_application();
+		}
+		else
+		{
+			if(goto_aplication == 1) goto_application();
 		}
   }
   /* USER CODE END 3 */
@@ -390,6 +400,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
     if (HAL_CAN_GetRxMessage(hcan, CAN_RX_FIFO0, &RxHeader, RxData) != HAL_OK){}
 		if(RxHeader.StdId == 0x01)
 		{
+			bootloaderState = FW_SIZE;
 			resetTick();
 			initTime = HAL_GetTick();
 			uint32_t ts = 1;
@@ -410,8 +421,9 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 				percentBuf[0] = 100;
 				CAN_Send(PERCENT_ADDR, percentBuf, 1);
 				write_data_to_flash_app( RxData, RxHeader.DLC);
-				// clearFlash(CURRENT);
-				// updateCurrent();
+				clearFlash(CURRENT);
+				updateCurrent();
+				bootloaderState = CAN_FLASH;
 				goto_aplication = 1;
 				return;
 			}
@@ -442,8 +454,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 
 void resetTick()
 {
-	HAL_InitTick(TICK_INT_PRIORITY);
-	HAL_Delay(1);
+	static uint8_t initialized = 0;
+	if (!initialized)
+	{
+		HAL_InitTick(TICK_INT_PRIORITY);
+		initialized = 1;
+	}
 }
 
 void updateCurrent()
