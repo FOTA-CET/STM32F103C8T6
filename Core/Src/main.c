@@ -70,13 +70,12 @@ uint8_t flag=0;
 uint16_t number_data_can = 0;
 uint16_t counter = 0;
 uint8_t currentPercent = -1;
-volatile char goto_aplication=0;
 uint8_t percentBuf[1] = {};
 	
 uint16_t application_write_idx = 0;
 	
 uint32_t timeout_init = 4500;
-uint32_t timeout_flash = 1000;
+uint32_t timeout_flash = 100;
 uint32_t initTime;
 	
 State bootloaderState = INIT;
@@ -156,7 +155,7 @@ int main(void)
 		}
 		else
 		{
-			if(goto_aplication == 1) goto_application();
+			goto_application();
 		}
   }
   /* USER CODE END 3 */
@@ -424,7 +423,6 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 				clearFlash(CURRENT);
 				updateCurrent();
 				bootloaderState = CAN_FLASH;
-				goto_aplication = 1;
 				return;
 			}
 		else
