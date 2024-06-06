@@ -348,11 +348,8 @@ static HAL_StatusTypeDef write_data_to_flash_app( uint8_t *data, uint16_t data_l
 		
 int processPercentCAN(int firmwareSize, int count)
 {
-	uint8_t percent = ((float)count / (float)firmwareSize)*100;
-	if(percent == 0 || percent == 25 || percent == 50 || percent == 75)
-	{
-		return percent;
-	}
+	uint8_t percent = (uint8_t)(((uint32_t)count * 100 + firmwareSize / 2) / firmwareSize);
+	if(percent < 100) return percent;
 	return -1;
 }
 
@@ -437,7 +434,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 					memset(percentBuf,0, 1);
 					percentBuf[0] = percent;
 					CAN_Send(PERCENT_ADDR, percentBuf, 1);
-					break;
+					// break;
 				}
 			}
 			for(uint8_t i = 0; i < 8;i++)
