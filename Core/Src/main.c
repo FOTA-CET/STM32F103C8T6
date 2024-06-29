@@ -63,7 +63,7 @@ CAN_HandleTypeDef hcan;
 /* USER CODE BEGIN PV */
 uint32_t PROGRAM_START_CURRENT = ((uint32_t)0x08000000 + (NUMBER_PAGE_CURRENT*1024));
 uint32_t PROGRAM_START_OTA = ((uint32_t)0x08000000 + (NUMBER_PAGE_OTA*1024));
-uint32_t CURRENT_START_FACTORY = ((uint32_t)0x08000000 + (NUMBER_PAGE_FACTORY*1024));
+uint32_t PROGRAM_START_FACTORY = ((uint32_t)0x08000000 + (NUMBER_PAGE_FACTORY*1024));
 uint32_t FLASH_ADDRESS;
 
 uint32_t count=0,size_count=0, size_count_can = 1;
@@ -480,7 +480,7 @@ void updateCurrent(UpdateCurrent flash)
 
 	for (i = 0; i < FLASH_SIZE_HEX; i += 4) {
 			if(flash == FOTA) buffer = *(__IO uint32_t*)(PROGRAM_START_OTA + i);
-		else buffer = *(__IO uint32_t*)(CURRENT_START_FACTORY + i);
+		else buffer = *(__IO uint32_t*)(PROGRAM_START_FACTORY + i);
 
 			status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, PROGRAM_START_CURRENT + i, buffer);
 			
