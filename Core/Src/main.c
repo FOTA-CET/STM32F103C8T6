@@ -35,17 +35,20 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define PERCENT_ADDR 0x100
-#define NUMBER_PAGE_CONFIG 9
-#define NUMBER_PAGE_CURRENT 10
-#define NUMBER_PAGE_OTA 69
 
-#define SIZE_PAGE_CURRENT 59
-#define SIZE_PAGE_OTA 59
+#define NUMBER_PAGE_CURRENT 11
+#define NUMBER_PAGE_OTA 50
+#define NUMBER_PAGE_FACTORY 89
+
+#define SIZE_PAGE_CURRENT 39
+#define SIZE_PAGE_OTA 39
+#define SIZE_PAGE_FACTORY 39
 
 #define FLASH_SIZE_HEX ((uint32_t)1024*SIZE_PAGE_CURRENT)
 
+typedef enum {FOTA, FACTORY}UpdateCurrent;
 typedef enum {OTA, CURRENT}Region;
-typedef enum {INIT, FW_SIZE, CAN_FLASH}State;
+typedef enum {INIT, FW_SIZE, CAN_FLASH, FACTORYRST}State;
 
 /* USER CODE END PD */
 
@@ -60,7 +63,7 @@ CAN_HandleTypeDef hcan;
 /* USER CODE BEGIN PV */
 uint32_t PROGRAM_START_CURRENT = ((uint32_t)0x08000000 + (NUMBER_PAGE_CURRENT*1024));
 uint32_t PROGRAM_START_OTA = ((uint32_t)0x08000000 + (NUMBER_PAGE_OTA*1024));
-uint32_t CURRENT_START_CONFIG = ((uint32_t)0x08000000 + (NUMBER_PAGE_CONFIG*1024));
+uint32_t CURRENT_START_FACTORY = ((uint32_t)0x08000000 + (NUMBER_PAGE_FACTORY*1024));
 uint32_t FLASH_ADDRESS;
 
 uint32_t count=0,size_count=0, size_count_can = 1;
@@ -92,7 +95,7 @@ int processPercentCAN(int firmwareSize, int count);
 static void goto_application( void );
 void clearFlash(Region chooseVersion);
 void resetTick();
-void updateCurrent();
+void updateCurrent(UpdateCurrent flash);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -152,6 +155,12 @@ int main(void)
 		else if(bootloaderState == FW_SIZE)
 		{
 			if((HAL_GetTick() - initTime) >= timeout_flash) goto_application();
+		}
+		else if(bootloaderState == FACTORYRST)
+		{
+			clearFlash(CURRENT);
+			updateCurrent(FACTORY);
+			goto_application();
 		}
 		else
 		{
@@ -370,7 +379,6 @@ void clearFlash(Region chooseVersion)
 			EraseInitStruct.PageAddress   = PROGRAM_START_OTA;
 			EraseInitStruct.NbPages       = SIZE_PAGE_OTA;
 		}
-
 		int ret = HAL_FLASHEx_Erase( &EraseInitStruct, &SectorError );
 }
 
@@ -408,7 +416,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 					flag = 1;
 		}
 		
-		if(RxHeader.StdId == 0x02 && flag == 1)
+		else if(RxHeader.StdId == 0x02 && flag == 1)
 		{
 			resetTick();
 			initTime = HAL_GetTick();
@@ -418,7 +426,7 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 				CAN_Send(PERCENT_ADDR, percentBuf, 1);
 				write_data_to_flash_app( RxData, RxHeader.DLC);
 				clearFlash(CURRENT);
-				updateCurrent();
+				updateCurrent(FOTA);
 				bootloaderState = CAN_FLASH;
 				return;
 			}
@@ -445,6 +453,11 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 			number_data_can++;
 		}
 	}
+		else if(RxHeader.StdId == 0x05) 
+		{
+			bootloaderState = FACTORYRST;
+			return;
+		}
 }
 
 void resetTick()
@@ -457,7 +470,7 @@ void resetTick()
 	}
 }
 
-void updateCurrent()
+void updateCurrent(UpdateCurrent flash)
 {
 	HAL_StatusTypeDef status;
 	uint32_t i = 0;
@@ -466,7 +479,8 @@ void updateCurrent()
 	HAL_FLASH_Unlock();
 
 	for (i = 0; i < FLASH_SIZE_HEX; i += 4) {
-			buffer = *(__IO uint32_t*)(PROGRAM_START_OTA + i);
+			if(flash == FOTA) buffer = *(__IO uint32_t*)(PROGRAM_START_OTA + i);
+		else buffer = *(__IO uint32_t*)(CURRENT_START_FACTORY + i);
 
 			status = HAL_FLASH_Program(FLASH_TYPEPROGRAM_WORD, PROGRAM_START_CURRENT + i, buffer);
 			
