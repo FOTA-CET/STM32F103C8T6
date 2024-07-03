@@ -44,6 +44,8 @@
 #define SIZE_PAGE_OTA 39
 #define SIZE_PAGE_FACTORY 39
 
+#define RST_CMD 0x41
+
 #define FLASH_SIZE_HEX ((uint32_t)1024*SIZE_PAGE_CURRENT)
 
 typedef enum {FOTA, FACTORY}UpdateCurrent;
@@ -455,8 +457,12 @@ void HAL_CAN_RxFifo0MsgPendingCallback(CAN_HandleTypeDef *hcan)
 	}
 		else if(RxHeader.StdId == 0x05) 
 		{
-			bootloaderState = FACTORYRST;
-			return;
+			if(RxData[0] == RST_CMD)
+			{
+				bootloaderState = FACTORYRST;
+				return;
+			}
+
 		}
 }
 
